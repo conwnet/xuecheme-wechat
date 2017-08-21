@@ -1,6 +1,6 @@
 <template>
   <div>
-    <mt-navbar v-model="page">
+    <mt-navbar v-model="page" fixed>
       <mt-tab-item id="enroll">套餐详情</mt-tab-item>
       <mt-tab-item id="comment">学员评价</mt-tab-item>
       <mt-tab-item id="chat">在线客服</mt-tab-item>
@@ -265,8 +265,10 @@ export default {
     background-color: #f4f4f4;
   }
 
+
+
   #container {
-    margin-top: 3px;
+    margin-top: 49px;
   }
 
   .messagePopup {
