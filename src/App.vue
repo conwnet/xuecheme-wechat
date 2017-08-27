@@ -123,10 +123,8 @@
 
 <script>
 
-// import { Toast } from 'mint-ui'
 import axios from 'axios'
-import config from '@/config'
-// import qs from 'querystring'
+import config from './config'
 
 let _get = (url, params, callback) => {
   let ssid = localStorage.ssid
@@ -149,6 +147,29 @@ let _post = (url, data, callback) => {
   } else {
     axios.post(url, data, { headers: { ssid: ssid } }).then(callback)
   }
+}
+
+let wxpay = () => {
+  _get (config.apiUrl + 'jsSdkConfig', { url: location.href.split('#')[0] }, res => {
+    if (res.status === 200) {
+      wx.config(res.data);
+      _get (config.apiUrl + 'payParams', res => {
+        if (res.status === 200) {
+          let data = res.data
+          wx.chooseWXPay({
+            timestamp: data.timeStamp,
+            nonceStr: data.nonceStr,
+            package: data.package,
+            signType: data.signType,
+            paySign: data.paySign,
+            success: res => {
+              console.log(res);
+            }
+          })
+        }
+      })
+    }
+  })
 }
 
 export default {
@@ -192,7 +213,7 @@ export default {
   watch: {
     page (val) {
       if (val === 'enroll') {
-        _get(config.apiUrl + 'school', {}, res => {
+        _get (config.apiUrl + 'school', {}, res => {
           if (res.status === 200) {
             let data = res.data
             this.banners = data.banners
@@ -203,14 +224,14 @@ export default {
           }
         })
 
-        _get(config.apiUrl + 'user', {}, res => {
+        _get (config.apiUrl + 'user', {}, res => {
           if (res.status === 200) {
             let data = res.data
             this.nickname = data.nickname
           }
         })
       } else if (val === 'comment') {
-        _get(config.apiUrl + 'comments', {}, res => {
+        _get (config.apiUrl + 'comments', {}, res => {
           if (res.status === 200) {
             this.comments = res.data
           }
@@ -272,6 +293,7 @@ export default {
       })
     },
     confirmEnroll () {
+      return wxpay();
       if (!this.checkFormat('name')) this.Message('请问如何称呼您？')
       else if (!this.checkFormat('mobile')) this.Message('请问如何联系您？')
       else if (!this.checkFormat('verify')) this.Message('我们需要验证码以确定您没有错误输入了手机号')
@@ -285,6 +307,7 @@ export default {
               this.Message(data.errmsg)
             } else {
               this.Message('ok')
+              wxpay();
             }
           }
         })
@@ -292,8 +315,8 @@ export default {
     }
   },
   created () {
-    // localStorage.ssid = 'ssid'
-    // localStorage.timeout = Date.now() + 7200 * 1000
+     localStorage.ssid = 'ssid'
+     localStorage.timeout = Date.now() + 7200 * 1000
     this.page = 'enroll'
   }
 }
@@ -475,7 +498,5 @@ export default {
     transform: translateX(10px);
     opacity: 0;
   }
-
-    
 
 </style>

@@ -1,3 +1,3 @@
 export default {
-  apiUrl: 'http://localhost:3000/api/'
+  apiUrl: 'http://xcm.conw.net:3000/api/'
 }
