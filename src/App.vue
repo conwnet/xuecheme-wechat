@@ -15,7 +15,7 @@
             <div class="info">
               <div class="logo"><img :src="logo.src" /></div>
               <div class="content">
-                <h1>学车么- 携手银河驾校</h1>
+                <h1>{{ this.title }}</h1>
                 <p class="price">
                   <span>¥</span>
                   <span style="font-size: 30px;">{{ pack.price || '???' }}</span>
@@ -53,16 +53,16 @@
             </mt-header>
 
             <div style="margin-top: 40px;">
-              <mt-field label="微信" placeholder="获取失败，请重新进入" v-model="nickname" readonly disableClear></mt-field>
+              <mt-field label="微信" placeholder="获取失败，请重新进入" v-model="nickname" :state="checkFormat('nickname') ? 'success' : 'error'" readonly disableClear></mt-field>
               <mt-field label="姓名" placeholder="怎么称呼您？" :state="checkFormat('name') ? 'success' : 'error'" v-model="name"></mt-field>
               <mt-field label="手机号" placeholder="怎么联系您？" :state="checkFormat('mobile') ? 'success' : 'error'" v-model="mobile"></mt-field>
               <mt-field label="验证码" placeholder="请查收短信～" :state="checkFormat('verify') ? 'success' : 'error'" v-model="verify">
                 <mt-button type="primary" @click="sendVerify()" :disabled="verifyButton.disabled">{{ verifyButton.text }}</mt-button>
               </mt-field>
-              <mt-field label="推荐人" placeholder="推荐人的手机号" v-model="invite"></mt-field>
+              <mt-field label="优惠码" placeholder="可在公众号内获取" v-model="promo"></mt-field>
             </div>
             <div class="part">
-              <mt-button style="width: 95%; margin: 0 auto;" type="primary" size="large" @click="enrollPopupVisible = true">微信支付</mt-button>
+              <mt-button style="width: 95%; margin: 0 auto;" type="primary" size="large" @click="confirmEnroll">微信支付</mt-button>
             </div>
           </mt-popup>
 
@@ -80,25 +80,23 @@
 
         <transition name="slide-fade">
           <div class="input" v-if="inputBox">
-            <mt-field type="textarea" rows="3" style="border: 1px solid #bbb;"></mt-field>
-            <mt-button size="small" type="primary" class="fb-btn">发表</mt-button>
+            <mt-field type="textarea" rows="3" style="border: 1px solid #bbb;" v-model="comment"></mt-field>
+            <mt-button size="small" type="primary" class="fb-btn" @click="addComment">发表</mt-button>
             <mt-button size="small" class="fb-btn" @click="inputBox = !inputBox">取消</mt-button>
           </div>
         </transition>
 
-
-
         <mt-spinner type="snake" color="#26a2ff" v-if="!comments.length" :size="40" style="display: block; width: 40px; margin: 0 auto; padding: 10px;"></mt-spinner>
 
         <transition-group name="slide-fade">
-          <div class="comment" v-for="(item, index) in comments" :key="'comment-' + index" v-if="showComment(item.state)">
+          <div class="comment" v-for="(item, index) in comments" :key="'comment-' + index" v-if="showComment(item.status)">
             <img class="comment-headimg" :src="item.headimgurl" />
             <div class="comment-arrow"></div>
             <div class="comment-container">
               <div class="comment-title">
                 <span class="comment-nickname">{{ item.nickname }}</span>
                 <span>{{ item.date }}</span>
-                <span>({{ item.state ? '已报名' : '未报名' }})</span>
+                <span>({{ item.status ? '已报名' : '未报名' }})</span>
               </div>
               <div class="comment-content">
                 <p>{{ item.content }}</p>
@@ -114,8 +112,6 @@
         <p style="text-align: center;">即将上线！</p>
       </mt-tab-container-item>
 
-
-
     </mt-tab-container>
 
     <mt-popup v-model="messagePopupVisible" class="messagePopup" position="top" :modal="false">
@@ -128,6 +124,32 @@
 <script>
 
 // import { Toast } from 'mint-ui'
+import axios from 'axios'
+import config from '@/config'
+// import qs from 'querystring'
+
+let _get = (url, params, callback) => {
+  let ssid = localStorage.ssid
+  let timeout = parseInt(localStorage.timeout)
+
+  if (!ssid || timeout - 600000 < Date.now()) {
+    // location.href = ''
+    console.log('Authorize faild...')
+  } else {
+    axios.get(url, { params: params, headers: { ssid: ssid } }).then(callback)
+  }
+}
+
+let _post = (url, data, callback) => {
+  let ssid = localStorage.ssid
+  let timeout = parseInt(localStorage.timeout)
+
+  if (!ssid || timeout - 600000 < Date.now()) {
+    console.log('Authorize faild...')
+  } else {
+    axios.post(url, data, { headers: { ssid: ssid } }).then(callback)
+  }
+}
 
 export default {
   name: 'app',
@@ -141,9 +163,10 @@ export default {
       message: '',
       nickname: '',
       name: '',
+      title: '',
       mobile: '',
       verify: '',
-      invite: '',
+      promo: '',
       pack: {},
       logo: {},
       packs: [],
@@ -151,9 +174,10 @@ export default {
       verifyButton: { disabled: false, text: '立即发送' },
       // comment page
       comments: [],
+      comment: '',
       inputBox: false,
       alreadyEnroll: true,
-      notEnroll: false
+      notEnroll: true
     }
   },
   computed: {
@@ -168,53 +192,29 @@ export default {
   watch: {
     page (val) {
       if (val === 'enroll') {
-        setTimeout(() => {
-          this.banners = [
-            { src: 'http://placehold.it/350x200', link: '#' },
-            { src: 'http://placehold.it/350x200', link: '#' }
-          ]
-          this.logo = { src: 'http://placehold.it/80x80' }
-          this.packs = [
-            { name: '2588 平民套餐', desc: '2588 平民套餐，一费到底，快速拿证！', price: 2588, id: 1 },
-            { name: '2888 奢华套餐', desc: '2888 奢华套餐，科二保过，拿证更容易！', price: 2888, id: 2 },
-            { name: '3388 土豪套餐', desc: '3388 土豪套餐，科二科三直飞，极速拿证！', price: 3388, id: 3 }
-          ]
-          this.nickname = '凌乱'
-          this.pack = this.packs[1]
-        }, 1000)
+        _get(config.apiUrl + 'school', {}, res => {
+          if (res.status === 200) {
+            let data = res.data
+            this.banners = data.banners
+            this.title = data.title
+            this.logo = data.logo
+            this.packs = data.packs
+            this.pack = this.packs[0]
+          }
+        })
+
+        _get(config.apiUrl + 'user', {}, res => {
+          if (res.status === 200) {
+            let data = res.data
+            this.nickname = data.nickname
+          }
+        })
       } else if (val === 'comment') {
-        setTimeout(() => {
-          this.comments = [
-            {
-              headimgurl: 'http://placehold.it/80x80',
-              nickname: '凌乱',
-              date: '2017-08-15',
-              state: 0,
-              content: '后来使用开发工具查看是用CSS来实现的,现记录'
-            },
-            {
-              headimgurl: 'http://placehold.it/80x80',
-              nickname: '别急还没硬',
-              date: '2017-08-15',
-              state: 1,
-              content: '预处理技术现在已经非常成熟,比较流行的有Less'
-            },
-            {
-              headimgurl: 'http://placehold.it/80x80',
-              nickname: '凌乱',
-              date: '2017-08-15',
-              state: 0,
-              content: '后来使用开发工具查看是用CSS来实现的,现记录'
-            },
-            {
-              headimgurl: 'http://placehold.it/80x80',
-              nickname: '别急还没硬',
-              date: '2017-08-15',
-              state: 1,
-              content: '预处理技术现在已经非常成熟,比较流行的有Less'
-            }
-          ]
-        }, 1000)
+        _get(config.apiUrl + 'comments', {}, res => {
+          if (res.status === 200) {
+            this.comments = res.data
+          }
+        })
       }
     }
   },
@@ -228,19 +228,29 @@ export default {
       }, 2000)
     },
     sendVerify (message) {
-      this.Message('发送成功！')
-      let second = 60
-      this.verifyButton = { disabled: true, text: '60s' }
-      let intval = setInterval(() => {
-        this.verifyButton = { disabled: true, text: --second + 's' }
-      }, 1000)
-      setTimeout(() => {
-        clearInterval(intval)
-        this.verifyButton = { disabled: false, text: '再次发送' }
-      }, 60000)
+      if (this.checkFormat('mobile')) {
+        _get(config.apiUrl + 'verify', { mobile: this.mobile }, res => {
+          if (res.status === 200) {
+            this.Message(res.data.errmsg)
+            let second = 60
+            this.verifyButton = { disabled: true, text: '60s' }
+            let intval = setInterval(() => {
+              this.verifyButton = { disabled: true, text: --second + 's' }
+            }, 1000)
+            setTimeout(() => {
+              clearInterval(intval)
+              this.verifyButton = { disabled: false, text: '再次发送' }
+            }, 60000)
+          } else {
+            this.Message('网络貌似开小差了...')
+          }
+        })
+      } else {
+        this.Message('手机号格式不正确哦，这是中国号码吗？')
+      }
     },
-    showComment (state) {
-      return (state && this.alreadyEnroll) || (!state && this.notEnroll)
+    showComment (status) {
+      return (status && this.alreadyEnroll) || (!status && this.notEnroll)
     },
     checkFormat (type) {
       if (type === 'name') {
@@ -249,10 +259,41 @@ export default {
         return /1[0-9]{10}/.test(this.mobile) && this.mobile.length === 11
       } else if (type === 'verify') {
         return /[0-9]+/.test(this.verify)
+      } else if (type === 'nickname') {
+        return this.nickname !== ''
+      }
+    },
+    addComment () {
+      _post(config.apiUrl + 'comment', { content: this.comment }, res => {
+        if (res.status === 200) {
+          this.Message(res.data.errmsg)
+          if (!res.data.errcode) this.inputBox = !this.inputBox
+        }
+      })
+    },
+    confirmEnroll () {
+      if (!this.checkFormat('name')) this.Message('请问如何称呼您？')
+      else if (!this.checkFormat('mobile')) this.Message('请问如何联系您？')
+      else if (!this.checkFormat('verify')) this.Message('我们需要验证码以确定您没有错误输入了手机号')
+      else {
+        _post(config.apiUrl + 'order', {
+          name: this.name, verify: this.verify, promo: this.promo
+        }, res => {
+          if (res.status === 200) {
+            let data = res.data
+            if (data.errcode) {
+              this.Message(data.errmsg)
+            } else {
+              this.Message('ok')
+            }
+          }
+        })
       }
     }
   },
   created () {
+    // localStorage.ssid = 'ssid'
+    // localStorage.timeout = Date.now() + 7200 * 1000
     this.page = 'enroll'
   }
 }
@@ -264,8 +305,6 @@ export default {
     margin: 0;
     background-color: #f4f4f4;
   }
-
-
 
   #container {
     margin-top: 49px;
