@@ -11,7 +11,8 @@
   "dependencies": {
     "axios": "^0.16.2",
     "mint-ui": "^2.2.9",
-    "vue": "^2.3.3"
+    "vue": "^2.3.3",
+    "weixin-js-sdk": "^1.2.0"
   },
   "devDependencies": {
     "babel-core": "^6.0.0",

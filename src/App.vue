@@ -18,15 +18,15 @@
                 <h1>{{ this.title }}</h1>
                 <p class="price">
                   <span>¥</span>
-                  <span style="font-size: 30px;">{{ pack.price || '???' }}</span>
+                  <span style="font-size: 30px;">{{ parseInt(pack.price / 100) || '???' }}</span>
                 </p>
               </div>
             </div>
             
             
             <div style="display: flex; color: #888; font-size: 12px; margin-top: 10px;">
-              <div style="flex: 1; text-align:center;">已报名：2</div>
-              <div style="flex: 1; text-align:center;">评价：21</div>
+              <div style="flex: 1; text-align:center;">已报名：{{ order_cnt }}</div>
+              <div style="flex: 1; text-align:center;">评价：{{ comment_cnt }}</div>
               <div style="flex: 1; text-align:center;">辽宁沈阳</div>
             </div>
           </div>
@@ -125,14 +125,14 @@
 
 import axios from 'axios'
 import config from './config'
+import wx from 'weixin-js-sdk'
 
 let _get = (url, params, callback) => {
   let ssid = localStorage.ssid
   let timeout = parseInt(localStorage.timeout)
 
   if (!ssid || timeout - 600000 < Date.now()) {
-    // location.href = ''
-    console.log('Authorize faild...')
+    console.log('身份认证失败，请重新进入...')
   } else {
     axios.get(url, { params: params, headers: { ssid: ssid } }).then(callback)
   }
@@ -143,33 +143,10 @@ let _post = (url, data, callback) => {
   let timeout = parseInt(localStorage.timeout)
 
   if (!ssid || timeout - 600000 < Date.now()) {
-    console.log('Authorize faild...')
+    console.log('身份认证失败，请重新进入...')
   } else {
     axios.post(url, data, { headers: { ssid: ssid } }).then(callback)
   }
-}
-
-let wxpay = () => {
-  _get (config.apiUrl + 'jsSdkConfig', { url: location.href.split('#')[0] }, res => {
-    if (res.status === 200) {
-      wx.config(res.data);
-      _get (config.apiUrl + 'payParams', res => {
-        if (res.status === 200) {
-          let data = res.data
-          wx.chooseWXPay({
-            timestamp: data.timeStamp,
-            nonceStr: data.nonceStr,
-            package: data.package,
-            signType: data.signType,
-            paySign: data.paySign,
-            success: res => {
-              console.log(res);
-            }
-          })
-        }
-      })
-    }
-  })
 }
 
 export default {
@@ -181,6 +158,8 @@ export default {
       // enroll page
       packSheetVisible: false,
       enrollPopupVisible: false,
+      order_cnt: 0,
+      comment_cnt: 0,
       message: '',
       nickname: '',
       name: '',
@@ -216,18 +195,14 @@ export default {
         _get (config.apiUrl + 'school', {}, res => {
           if (res.status === 200) {
             let data = res.data
+            this.order_cnt = data.order_cnt
+            this.comment_cnt = data.comment_cnt
+            this.nickname = data.nickname
             this.banners = data.banners
             this.title = data.title
             this.logo = data.logo
             this.packs = data.packs
             this.pack = this.packs[0]
-          }
-        })
-
-        _get (config.apiUrl + 'user', {}, res => {
-          if (res.status === 200) {
-            let data = res.data
-            this.nickname = data.nickname
           }
         })
       } else if (val === 'comment') {
@@ -293,21 +268,33 @@ export default {
       })
     },
     confirmEnroll () {
-      return wxpay();
       if (!this.checkFormat('name')) this.Message('请问如何称呼您？')
       else if (!this.checkFormat('mobile')) this.Message('请问如何联系您？')
       else if (!this.checkFormat('verify')) this.Message('我们需要验证码以确定您没有错误输入了手机号')
       else {
         _post(config.apiUrl + 'order', {
-          name: this.name, verify: this.verify, promo: this.promo
+          name: this.name, verify: this.verify, promo: this.promo, packId: this.pack.id
         }, res => {
           if (res.status === 200) {
             let data = res.data
             if (data.errcode) {
               this.Message(data.errmsg)
             } else {
-              this.Message('ok')
-              wxpay();
+              _get (config.apiUrl + 'payParams', {}, res => {
+                if (res.status === 200) {
+                  let data = res.data
+                  wx.chooseWXPay({
+                    timestamp: data.timeStamp,
+                    nonceStr: data.nonceStr,
+                    package: data.package,
+                    signType: data.signType,
+                    paySign: data.paySign,
+                    success: res => {
+                      this.Message('支付成功！');
+                    }
+                  })
+                }
+              })
             }
           }
         })
@@ -315,9 +302,12 @@ export default {
     }
   },
   created () {
-     localStorage.ssid = 'ssid'
-     localStorage.timeout = Date.now() + 7200 * 1000
     this.page = 'enroll'
+    _get (config.apiUrl + 'jsSdkConfig', { url: location.href.split('#')[0] }, res => {
+      if (res.status === 200) {
+        wx.config(res.data);
+      }
+    })
   }
 }
 </script>

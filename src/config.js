@@ -1,3 +1,4 @@
 export default {
-  apiUrl: 'http://xcm.conw.net:3000/api/'
+  // apiUrl: 'http://localhost:3000/api/',
+  apiUrl: 'http://xcm.aimoma.com:3000/api/'  
 }
